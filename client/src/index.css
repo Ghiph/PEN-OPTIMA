@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    @apply bg-navy-950 text-slate-200 font-sans;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-navy-800; }
+  ::-webkit-scrollbar-thumb { @apply bg-navy-500 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-cyan/60; }
+}
+
+@layer components {
+  .card {
+    @apply bg-navy-800 border border-slate-700/50 rounded-2xl p-5 shadow-card;
+  }
+  .btn-primary {
+    @apply bg-cyan text-navy-950 font-semibold px-5 py-2.5 rounded-xl hover:bg-cyan/80 transition-all duration-200 text-sm active:scale-95;
+  }
+  .btn-secondary {
+    @apply bg-navy-700 border border-slate-600 text-slate-200 font-medium px-4 py-2 rounded-xl hover:bg-navy-600 transition-all duration-200 text-sm;
+  }
+  .btn-danger {
+    @apply bg-red-900/40 border border-red-700/50 text-red-400 font-medium px-4 py-2 rounded-xl hover:bg-red-800/60 transition-all duration-200 text-sm;
+  }
+  .input {
+    @apply bg-navy-900 border border-slate-600/60 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30 transition-all w-full;
+  }
+  .select {
+    @apply bg-navy-900 border border-slate-600/60 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan/60 transition-all w-full cursor-pointer;
+  }
+  .tab {
+    @apply px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer;
+  }
+  .tab-active {
+    @apply bg-cyan/15 text-cyan border border-cyan/30;
+  }
+  .tab-inactive {
+    @apply text-slate-400 hover:text-slate-200 hover:bg-navy-700;
+  }
+  .badge-high { @apply bg-emerald/10 text-emerald-400 border border-emerald-500/30 text-xs px-2 py-0.5 rounded-full; }
+  .badge-med  { @apply bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs px-2 py-0.5 rounded-full; }
+  .badge-low  { @apply bg-red-500/10 text-red-400 border border-red-500/30 text-xs px-2 py-0.5 rounded-full; }
+
+  .info-box  { @apply border-l-4 border-cyan pl-4 py-3 bg-cyan/5 rounded-r-xl text-sm text-slate-300; }
+  .warn-box  { @apply border-l-4 border-amber-400 pl-4 py-3 bg-amber-400/5 rounded-r-xl text-sm text-slate-300; }
+  .green-box { @apply border-l-4 border-emerald-400 pl-4 py-3 bg-emerald-400/5 rounded-r-xl text-sm text-slate-300; }
+}
+
+/* Recharts overrides */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line { stroke: rgba(148,163,184,0.08) !important; }
+.recharts-tooltip-wrapper { z-index: 50; }
+.recharts-default-tooltip {
+  background: #0a1628 !important;
+  border: 1px solid rgba(148,163,184,0.2) !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+}

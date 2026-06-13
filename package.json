@@ -1,0 +1,9 @@
+{
+  "name": "pen-optima",
+  "version": "1.0.0",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "server": "cd server && node index.js",
+    "client": "cd client && npm run dev"
+  }
+}

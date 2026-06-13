@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Node (React client / Node server)
+node_modules/
+client/node_modules/
+server/node_modules/
+npm-debug.log*
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Claude Code local config
+.claude/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
