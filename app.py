@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
 import streamlit as st
 
@@ -23,18 +24,111 @@ MMSTB_FACTOR = 6.2898 / 1_000_000.0
 
 st.set_page_config(page_title="PEN-OPTIMA", page_icon="🛢️", layout="wide")
 
+# Cohesive blue + yellow Plotly theme used across all charts.
+PEN_COLORWAY = ["#2563EB", "#F5B301", "#14375E", "#5B8DEF", "#E08A00", "#9DB8E8"]
+pio.templates["pen"] = pio.templates["plotly_white"]
+pio.templates["pen"].layout.colorway = PEN_COLORWAY
+pio.templates["pen"].layout.font.family = "Inter, Segoe UI, sans-serif"
+pio.templates["pen"].layout.font.color = "#102A43"
+pio.templates["pen"].layout.title.font.color = "#102A43"
+pio.templates.default = "pen"
+px.defaults.color_discrete_sequence = PEN_COLORWAY
+
 CUSTOM_CSS = """
 <style>
+:root {
+  --pen-navy: #102A43;
+  --pen-blue: #2563EB;
+  --pen-blue-dark: #1D4FD7;
+  --pen-yellow: #F5B301;
+  --pen-border: #E3E9F2;
+  --pen-muted: #5B6B82;
+}
+
+/* ---- base layout ---- */
 [data-testid="stHeader"] {background: transparent;}
 [data-testid="stDecoration"] {display: none;}
-.block-container {padding-top: 1.0rem; padding-bottom: 2rem;}
-.kpi-card {padding: 1rem; border-radius: 18px; border: 1px solid rgba(120,120,120,.22); background: linear-gradient(135deg, rgba(242,246,250,.95), rgba(255,255,255,.75)); box-shadow: 0 2px 10px rgba(0,0,0,.04);}
-.kpi-title {font-size: .84rem; color: #667085; margin-bottom: .25rem;}
-.kpi-value {font-size: 1.55rem; font-weight: 800; color: #101828; margin: 0;}
-.kpi-note {font-size: .78rem; color: #667085; margin-top: .25rem;}
-.blue-box {border-left: 5px solid #2f80ed; padding: .8rem 1rem; background: rgba(47,128,237,.07); border-radius: 12px;}
-.warn-box {border-left: 5px solid #f59e0b; padding: .8rem 1rem; background: rgba(245,158,11,.09); border-radius: 12px;}
-.green-box {border-left: 5px solid #10b981; padding: .8rem 1rem; background: rgba(16,185,129,.08); border-radius: 12px;}
+html, body, [class*="css"] {font-family: "Inter", "Segoe UI", system-ui, sans-serif;}
+.block-container {padding-top: 1.4rem; padding-bottom: 2.5rem; max-width: 1400px;}
+.stApp {background: #F7F9FC;}
+
+/* ---- headings ---- */
+h1, h2, h3, h4 {color: var(--pen-navy); font-weight: 800; letter-spacing: -0.01em;}
+[data-testid="stMarkdownContainer"] h1 {
+  border-bottom: 3px solid var(--pen-yellow);
+  padding-bottom: .35rem; display: inline-block; margin-bottom: .6rem;
+}
+
+/* ---- sidebar: deep navy with yellow accents ---- */
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0B2239 0%, #14375E 100%);
+  border-right: 1px solid rgba(255,255,255,.06);
+}
+[data-testid="stSidebar"] * {color: #DCE6F2 !important;}
+[data-testid="stSidebar"] h1 {
+  color: var(--pen-yellow) !important; font-size: 1.5rem; letter-spacing: .04em;
+  border: none; padding: 0;
+}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] * {color: #9DB2CC !important;}
+
+/* nav radio styled as a menu */
+[data-testid="stSidebar"] [role="radiogroup"] {gap: 2px;}
+[data-testid="stSidebar"] [role="radiogroup"] label {
+  padding: .5rem .7rem; border-radius: 9px; margin: 0; transition: all .15s ease;
+  font-weight: 500;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:hover {background: rgba(255,255,255,.07);}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+  background: rgba(245,179,1,.16);
+  box-shadow: inset 3px 0 0 var(--pen-yellow);
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {
+  color: #FFFFFF !important; font-weight: 700;
+}
+
+/* ---- KPI cards ---- */
+.kpi-card {
+  padding: 1rem 1.15rem; border-radius: 14px; background: #FFFFFF;
+  border: 1px solid var(--pen-border); border-top: 3px solid var(--pen-yellow);
+  box-shadow: 0 1px 4px rgba(16,42,67,.06); height: 100%;
+}
+.kpi-title {font-size: .74rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--pen-muted); margin-bottom: .35rem;}
+.kpi-value {font-size: 1.5rem; font-weight: 800; color: var(--pen-navy); margin: 0; line-height: 1.15;}
+.kpi-note {font-size: .76rem; color: #7A8AA0; margin-top: .35rem;}
+
+/* ---- metric widgets as cards ---- */
+[data-testid="stMetric"] {
+  background: #FFFFFF; border: 1px solid var(--pen-border);
+  border-left: 3px solid var(--pen-blue); border-radius: 12px;
+  padding: .7rem .9rem; box-shadow: 0 1px 3px rgba(16,42,67,.05);
+}
+[data-testid="stMetricLabel"] p {color: var(--pen-muted); font-weight: 600;}
+[data-testid="stMetricValue"] {color: var(--pen-navy);}
+
+/* ---- info boxes ---- */
+.blue-box, .warn-box, .green-box {padding: .85rem 1.1rem; border-radius: 12px; line-height: 1.5;}
+.blue-box {border-left: 4px solid var(--pen-blue); background: #EEF3FB; color: var(--pen-navy);}
+.warn-box {border-left: 4px solid var(--pen-yellow); background: #FEF7E6; color: #6B4E00;}
+.green-box {border-left: 4px solid #1F9D6B; background: #E9F7F1; color: #0C5C3F;}
+
+/* ---- buttons ---- */
+.stButton > button, .stDownloadButton > button {
+  border-radius: 10px; font-weight: 600; border: 1px solid var(--pen-border);
+  transition: all .15s ease;
+}
+.stButton > button[kind="primary"] {background: var(--pen-blue); border: none;}
+.stButton > button[kind="primary"]:hover {background: var(--pen-blue-dark);}
+.stDownloadButton > button {background: #FFFFFF; color: var(--pen-blue); border: 1px solid var(--pen-blue);}
+.stDownloadButton > button:hover {background: var(--pen-blue); color: #FFFFFF;}
+
+/* ---- tabs ---- */
+.stTabs [data-baseweb="tab-list"] {gap: 4px; border-bottom: 1px solid var(--pen-border);}
+.stTabs [data-baseweb="tab"] {font-weight: 600; color: var(--pen-muted);}
+.stTabs [aria-selected="true"] {color: var(--pen-blue) !important;}
+
+/* ---- dataframes ---- */
+[data-testid="stDataFrame"] {border: 1px solid var(--pen-border); border-radius: 10px;}
+hr {border-color: var(--pen-border);}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
