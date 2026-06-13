@@ -936,6 +936,11 @@ def page_well_logs() -> None:
         return
     selected = st.selectbox("Well log table", tables)
     df = read_table(selected)
+    # pandas 3.x / Arrow may load all-null or text-stored SQLite columns as string
+    # dtype; coerce log curves back to numeric so stats and plots work.
+    for c in df.columns:
+        if c != "Well":
+            df[c] = pd.to_numeric(df[c], errors="coerce")
     marker_tables = list_tables("markers_")
     markers = read_table(marker_tables[0]) if marker_tables else None
     well_name = df["Well"].dropna().iloc[0] if "Well" in df.columns and df["Well"].notna().any() else selected
