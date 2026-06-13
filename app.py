@@ -328,6 +328,83 @@ def parse_marker_file(file_like) -> pd.DataFrame:
     return pd.read_csv(file_like, sep="\t")
 
 
+DEV_COLUMNS = ["MD", "X", "Y", "Z", "TVD", "DX", "DY", "AZIM", "INCL", "DLS"]
+
+
+def parse_dev_file(file_like, source_name: str = "trajectory") -> pd.DataFrame:
+    """Parse a tNavigator .dev deviation/trajectory file.
+
+    Extracts the well name and well-head X/Y from header comment lines, then the
+    survey table after the ``MD X Y Z TVD ...`` column header. Comment lines
+    starting with ``#`` are ignored for the table body. Returns columns:
+    Well, MD, X, Y, Z, TVD, DX, DY, AZIM, INCL, DLS, Head_X, Head_Y, Source.
+    """
+    if hasattr(file_like, "read"):
+        raw = file_like.read()
+        text = raw.decode("utf-8", errors="ignore") if isinstance(raw, (bytes, bytearray)) else str(raw)
+    else:
+        with open(file_like, "r", encoding="utf-8", errors="ignore") as fh:
+            text = fh.read()
+
+    lines = text.splitlines()
+    well_name: Optional[str] = None
+    head_x, head_y = np.nan, np.nan
+
+    def _after_colon(s: str) -> str:
+        return s.split(":", 1)[1].strip() if ":" in s else ""
+
+    def _first_float(s: str) -> float:
+        m = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", s)
+        return float(m.group()) if m else np.nan
+
+    # header metadata + locate the table column header line
+    header_idx: Optional[int] = None
+    for i, line in enumerate(lines):
+        s = line.strip()
+        low = s.lower()
+        if low.startswith("# well name"):
+            val = _after_colon(s)
+            if val:
+                well_name = val.split()[0]
+        elif low.startswith("# well head x"):
+            head_x = _first_float(_after_colon(s))
+        elif low.startswith("# well head y"):
+            head_y = _first_float(_after_colon(s))
+        elif header_idx is None:
+            tokens = s.lstrip("#").strip().split()
+            if len(tokens) >= 3 and [t.upper() for t in tokens[:3]] == ["MD", "X", "Y"]:
+                header_idx = i
+
+    # parse the survey table
+    start = header_idx + 1 if header_idx is not None else 0
+    rows: List[List[float]] = []
+    for line in lines[start:]:
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        parts = s.split()
+        try:
+            rows.append([float(p) for p in parts])
+        except ValueError:
+            continue
+
+    width = len(DEV_COLUMNS)
+    norm = [(r + [np.nan] * width)[:width] for r in rows]
+    df = pd.DataFrame(norm, columns=DEV_COLUMNS)
+    for c in DEV_COLUMNS:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    if not well_name:
+        base = os.path.splitext(os.path.basename(str(source_name)))[0]
+        well_name = base if base else "WELL"
+
+    df.insert(0, "Well", well_name)
+    df["Head_X"] = head_x
+    df["Head_Y"] = head_y
+    df["Source"] = source_name
+    return df[["Well"] + DEV_COLUMNS + ["Head_X", "Head_Y", "Source"]]
+
+
 def parse_generic_spatial(uploaded_file) -> pd.DataFrame:
     name = uploaded_file.name.lower()
     if name.endswith(".xlsx") or name.endswith(".xls"):
@@ -572,6 +649,13 @@ def seed_sample_data() -> List[str]:
     boundary = os.path.join(SAMPLE_DIR, "PenobscotBoundary_1.txt")
     if os.path.exists(boundary):
         loaded.append(save_df("boundary_penobscot", parse_boundary_file(boundary)))
+
+    for dev_file in ["B-41.dev", "L-30.dev"]:
+        path = os.path.join(SAMPLE_DIR, dev_file)
+        if os.path.exists(path):
+            dev_df = parse_dev_file(path, dev_file)
+            well = str(dev_df["Well"].iloc[0]) if not dev_df.empty else os.path.splitext(dev_file)[0]
+            loaded.append(save_df(f"trajectory_{well}", dev_df))
 
     demo_vario = os.path.join(SAMPLE_DIR, "demo_variogram_points.csv")
     if os.path.exists(demo_vario):
@@ -950,7 +1034,7 @@ def page_data_center() -> None:
             st.write(loaded)
 
     tab_las, tab_tnav, tab_prop, tab_spatial, tab_aux, tab_manage = st.tabs(
-        ["LAS Well Logs", "tNavigator Volumetric", "Property QC / Blocked Statistics", "Spatial / Variogram Data", "Markers / Boundary", "Manage DB"]
+        ["LAS Well Logs", "tNavigator Volumetric", "Property QC / Blocked Statistics", "Spatial / Variogram Data", "Markers / Boundary / Trajectory", "Manage DB"]
     )
 
     with tab_las:
@@ -1019,17 +1103,25 @@ def page_data_center() -> None:
                 st.success(f"Loaded {table}")
 
     with tab_aux:
-        aux_type = st.radio("Auxiliary type", ["Marker", "Boundary"], horizontal=True)
-        aux_files = st.file_uploader("Upload file", type=["txt", "csv"], accept_multiple_files=True, key="aux")
+        aux_type = st.radio("Auxiliary type", ["Marker", "Boundary", "Trajectory/Deviation"], horizontal=True)
+        aux_ext = ["txt", "csv", "dev"] if aux_type == "Trajectory/Deviation" else ["txt", "csv"]
+        aux_files = st.file_uploader("Upload file", type=aux_ext, accept_multiple_files=True, key="aux")
         if aux_files and st.button("Save auxiliary data"):
             for f in aux_files:
                 if aux_type == "Marker":
                     df = parse_marker_file(f)
                     table = save_df(f"markers_{f.name}", df)
-                else:
+                    st.success(f"{f.name} → {table} ({len(df):,} rows)")
+                elif aux_type == "Boundary":
                     df = parse_boundary_file(f)
                     table = save_df(f"boundary_{f.name}", df)
-                st.success(f"{f.name} → {table} ({len(df):,} rows)")
+                    st.success(f"{f.name} → {table} ({len(df):,} rows)")
+                else:
+                    df = parse_dev_file(f, f.name)
+                    well = str(df["Well"].iloc[0]) if not df.empty else os.path.splitext(f.name)[0]
+                    table = save_df(f"trajectory_{well}", df)
+                    st.success(f"Saved {well} trajectory with {len(df):,} survey points.")
+                    st.dataframe(df.head(8), use_container_width=True)
 
     with tab_manage:
         tables = list_tables()
@@ -1537,16 +1629,124 @@ def page_property_qc() -> None:
 
 def page_field_map() -> None:
     st.title("🗺️ Field Boundary / Spatial View")
-    tables = list_tables("boundary_")
-    if not tables:
-        st.warning("No boundary table. Upload PenobscotBoundary_1.txt or load sample data.")
+
+    boundary_tables = list_tables("boundary_")
+    traj_tables = list_tables("trajectory_")
+
+    if not boundary_tables and not traj_tables:
+        st.warning("No boundary table found. Upload PenobscotBoundary_1.txt in Data Center.")
         return
-    selected = st.selectbox("Boundary table", tables)
-    df = read_table(selected)
+
+    # ---- boundary ----
+    boundary_df: Optional[pd.DataFrame] = None
+    if boundary_tables:
+        sel_b = st.selectbox("Boundary table", boundary_tables)
+        boundary_df = read_table(sel_b)
+        for c in ("X", "Y"):
+            if c in boundary_df.columns:
+                boundary_df[c] = pd.to_numeric(boundary_df[c], errors="coerce")
+    else:
+        st.warning("No boundary table found. Upload PenobscotBoundary_1.txt in Data Center.")
+
+    # ---- well selection + display options ----
+    if traj_tables:
+        c_sel, c_opt = st.columns([1.5, 1])
+        with c_sel:
+            selected_wells = st.multiselect("Select wells to display", traj_tables, default=traj_tables)
+        with c_opt:
+            show_lines = st.checkbox("Show trajectory lines", value=True)
+            show_heads = st.checkbox("Show well head markers", value=True)
+            show_bottoms = st.checkbox("Show bottom-hole markers", value=True)
+            show_labels = st.checkbox("Show labels", value=True)
+    else:
+        st.info("No well trajectory data found. Upload B-41.dev and L-30.dev in Data Center.")
+        selected_wells = []
+        show_lines = show_heads = show_bottoms = show_labels = False
+
+    # ---- build figure ----
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df["X"], y=df["Y"], mode="lines+markers", fill="toself", name="Penobscot Boundary"))
-    fig.update_layout(title="Penobscot Boundary", xaxis_title="X", yaxis_title="Y", height=620, yaxis=dict(scaleanchor="x", scaleratio=1))
+    if boundary_df is not None and {"X", "Y"}.issubset(boundary_df.columns):
+        bxy = boundary_df.dropna(subset=["X", "Y"])
+        fig.add_trace(go.Scatter(
+            x=bxy["X"], y=bxy["Y"], mode="lines", fill="toself",
+            fillcolor="rgba(37,99,235,0.06)", line=dict(color="#14375E", width=2),
+            name="Penobscot Boundary", hoverinfo="skip",
+        ))
+
+    summary_rows: List[Dict[str, object]] = []
+    wi = 0
+    for tname in selected_wells:
+        wdf = read_table(tname)
+        if not {"X", "Y"}.issubset(wdf.columns):
+            st.warning(f"Skipping `{tname}`: no X/Y columns.")
+            continue
+        for c in ["X", "Y", "Z", "MD", "TVD", "Head_X", "Head_Y"]:
+            if c in wdf.columns:
+                wdf[c] = pd.to_numeric(wdf[c], errors="coerce")
+        well = str(wdf["Well"].iloc[0]) if "Well" in wdf.columns and wdf["Well"].notna().any() else tname.replace("trajectory_", "")
+        xy = wdf.dropna(subset=["X", "Y"])
+        if xy.empty:
+            st.warning(f"Skipping `{well}`: no usable X/Y rows.")
+            continue
+        color = PEN_COLORWAY[wi % len(PEN_COLORWAY)]
+        wi += 1
+
+        head_x = wdf["Head_X"].dropna().iloc[0] if "Head_X" in wdf.columns and wdf["Head_X"].notna().any() else xy["X"].iloc[0]
+        head_y = wdf["Head_Y"].dropna().iloc[0] if "Head_Y" in wdf.columns and wdf["Head_Y"].notna().any() else xy["Y"].iloc[0]
+        bot_x, bot_y = xy["X"].iloc[-1], xy["Y"].iloc[-1]
+        max_md = float(wdf["MD"].max()) if "MD" in wdf.columns and wdf["MD"].notna().any() else np.nan
+        max_tvd = float(wdf["TVD"].max()) if "TVD" in wdf.columns and wdf["TVD"].notna().any() else np.nan
+
+        n = len(xy)
+        custom = np.stack([
+            xy["MD"].to_numpy() if "MD" in xy.columns else np.full(n, np.nan),
+            xy["TVD"].to_numpy() if "TVD" in xy.columns else np.full(n, np.nan),
+            xy["Z"].to_numpy() if "Z" in xy.columns else np.full(n, np.nan),
+        ], axis=-1)
+        hovertemplate = (f"<b>{well}</b><br>MD=%{{customdata[0]:.1f}}<br>TVD=%{{customdata[1]:.1f}}"
+                         "<br>X=%{x:.1f}<br>Y=%{y:.1f}<br>Z=%{customdata[2]:.1f}<extra></extra>")
+
+        if show_lines:
+            fig.add_trace(go.Scatter(x=xy["X"], y=xy["Y"], mode="lines", line=dict(color=color, width=2.5),
+                                     name=f"{well} trajectory", customdata=custom, hovertemplate=hovertemplate))
+        if show_heads:
+            fig.add_trace(go.Scatter(
+                x=[head_x], y=[head_y], mode="markers+text" if show_labels else "markers",
+                marker=dict(symbol="triangle-up", size=14, color=color, line=dict(color="#FFFFFF", width=1.5)),
+                text=[well] if show_labels else None, textposition="top center", textfont=dict(color="#102A43", size=12),
+                name=f"{well} head", hovertemplate=f"<b>{well} head</b><br>X=%{{x:.1f}}<br>Y=%{{y:.1f}}<extra></extra>"))
+        elif show_labels:
+            fig.add_trace(go.Scatter(x=[head_x], y=[head_y], mode="text", text=[well], textposition="top center",
+                                     textfont=dict(color="#102A43", size=12), showlegend=False, hoverinfo="skip"))
+        if show_bottoms:
+            fig.add_trace(go.Scatter(
+                x=[bot_x], y=[bot_y], mode="markers",
+                marker=dict(symbol="x", size=11, color=color, line=dict(width=2)),
+                name=f"{well} bottom-hole", hovertemplate=f"<b>{well} bottom-hole</b><br>X=%{{x:.1f}}<br>Y=%{{y:.1f}}<extra></extra>"))
+
+        summary_rows.append({"Well": well, "Head_X": head_x, "Head_Y": head_y,
+                             "Bottom_X": bot_x, "Bottom_Y": bot_y, "Max_MD": max_md, "Max_TVD": max_tvd})
+
+    fig.update_layout(title="Penobscot Field Map — Boundary & Well Positions", xaxis_title="X (m)", yaxis_title="Y (m)",
+                      height=660, legend_orientation="h", margin=dict(t=60, b=20),
+                      yaxis=dict(scaleanchor="x", scaleratio=1))
     st.plotly_chart(fig, use_container_width=True)
+
+    if summary_rows:
+        st.subheader("Well location summary")
+        sdf = pd.DataFrame(summary_rows)
+        st.dataframe(sdf.round(2), use_container_width=True, hide_index=True)
+        st.download_button("⬇️ Download well location summary (CSV)", sdf.to_csv(index=False).encode("utf-8"),
+                           file_name="well_location_summary.csv", mime="text/csv")
+
+    st.markdown("""
+    <div class='blue-box'>
+    The field map displays the Penobscot boundary together with B-41 and L-30 well positions. These well
+    locations provide spatial control for static modeling, property distribution QC, and development-well
+    planning. In the current interpretation, B-41 and L-30 constrain the structural and petrophysical
+    uncertainty of the Hor_C base case and Hor_D upside appraisal.
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def page_development_plan() -> None:
