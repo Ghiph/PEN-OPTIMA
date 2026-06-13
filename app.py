@@ -129,6 +129,31 @@ h1, h2, h3, h4 {color: var(--pen-navy); font-weight: 800; letter-spacing: -0.01e
 /* ---- dataframes ---- */
 [data-testid="stDataFrame"] {border: 1px solid var(--pen-border); border-radius: 10px;}
 hr {border-color: var(--pen-border);}
+
+/* ---- workflow diagram ---- */
+.wf {display: flex; flex-wrap: wrap; align-items: stretch; gap: .2rem; margin: 1rem 0 .6rem;}
+.wf-step {
+  flex: 1 1 180px; background: #FFFFFF; border: 1px solid var(--pen-border);
+  border-top: 3px solid var(--pen-blue); border-radius: 14px; padding: 1.05rem 1.1rem;
+  position: relative; box-shadow: 0 1px 4px rgba(16,42,67,.06);
+}
+.wf-step.gate {border-top-color: var(--pen-yellow); background: #FFFCF3;}
+.wf-num {
+  position: absolute; top: -13px; left: 14px; width: 27px; height: 27px; border-radius: 50%;
+  background: var(--pen-blue); color: #FFFFFF; font-weight: 700; font-size: .85rem;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+.wf-step.gate .wf-num {background: var(--pen-yellow); color: #3A2C00;}
+.wf-ico {font-size: 1.55rem; line-height: 1;}
+.wf-title {font-weight: 800; color: var(--pen-navy); margin-top: .45rem; font-size: .98rem;}
+.wf-desc {font-size: .8rem; color: var(--pen-muted); margin-top: .3rem; line-height: 1.45;}
+.wf-arrow {display: flex; align-items: center; justify-content: center; padding: 0 .25rem; color: var(--pen-blue); font-size: 1.4rem; font-weight: 800;}
+.wf-out {display: flex; flex-wrap: wrap; gap: .8rem; margin: .2rem 0 .4rem;}
+.wf-out-card {flex: 1 1 260px; border-radius: 12px; padding: .9rem 1.1rem; border: 1px solid var(--pen-border);}
+.wf-out-card.ok {border-left: 4px solid var(--pen-blue); background: #EEF3FB;}
+.wf-out-card.assume {border-left: 4px solid var(--pen-yellow); background: #FEF7E6;}
+.wf-out-title {font-weight: 700; color: var(--pen-navy); font-size: .92rem;}
+.wf-out-desc {font-size: .8rem; color: var(--pen-muted); margin-top: .25rem; line-height: 1.45;}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -1557,21 +1582,47 @@ def page_development_plan() -> None:
     unavailable.
     </div>
     """, unsafe_allow_html=True)
-    st.code(
-        """tNavigator Blocked Wells Statistics
-  ↓ export one-column property: VSH, PHIE, NTG, Lithology
-PEN-OPTIMA Property QC & Variogram Readiness
-  ↓ distribution QC + statistical sill (sample variance) + nugget range
-Recommended tNavigator input:
-  - sill / variance        (calculated from the property)
-  - nugget effect          (5% / 10% / 15% of sill)
-  - main / normal / vertical range   (ASSUMPTION — needs X/Y/Z or depth)
-  ↓ only if X/Y/Z or depth exported
-Full directional/vertical experimental variogram (calculated ranges)
-  ↓
-Property Modeling QC → Volumetric Scenario Cockpit → Development Ranking""",
-        language="text",
-    )
+    st.markdown("""
+    <div class='wf'>
+      <div class='wf-step'>
+        <div class='wf-num'>1</div>
+        <div class='wf-ico'>🗄️</div>
+        <div class='wf-title'>Blocked Wells Statistics</div>
+        <div class='wf-desc'>Export a one-column property from tNavigator: VSH · PHIE · NTG · Lithology.</div>
+      </div>
+      <div class='wf-arrow'>›</div>
+      <div class='wf-step'>
+        <div class='wf-num'>2</div>
+        <div class='wf-ico'>📊</div>
+        <div class='wf-title'>Property QC</div>
+        <div class='wf-desc'>Distribution QC, statistical sill from sample variance, and a 5 / 10 / 15 % nugget range.</div>
+      </div>
+      <div class='wf-arrow'>›</div>
+      <div class='wf-step gate'>
+        <div class='wf-num'>3</div>
+        <div class='wf-ico'>🧭</div>
+        <div class='wf-title'>Variogram Readiness</div>
+        <div class='wf-desc'>Checks for X / Y / Z or depth columns to decide whether ranges can be calculated.</div>
+      </div>
+      <div class='wf-arrow'>›</div>
+      <div class='wf-step'>
+        <div class='wf-num'>4</div>
+        <div class='wf-ico'>🛢️</div>
+        <div class='wf-title'>Model &amp; Develop</div>
+        <div class='wf-desc'>Property-model QC → Volumetric Scenario Cockpit → Zone–Segment development ranking.</div>
+      </div>
+    </div>
+    <div class='wf-out'>
+      <div class='wf-out-card ok'>
+        <div class='wf-out-title'>✅ With X / Y / Z or depth data</div>
+        <div class='wf-out-desc'>Main, normal, and vertical ranges are <b>calculated</b> from an experimental directional variogram.</div>
+      </div>
+      <div class='wf-out-card assume'>
+        <div class='wf-out-title'>⚠️ One-column property only</div>
+        <div class='wf-out-desc'>Sill and nugget are calculated; ranges are clearly flagged as <b>geological assumptions</b>, never overclaimed.</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ============================================================
 # Main routing
